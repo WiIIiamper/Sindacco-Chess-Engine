@@ -98,6 +98,11 @@ static int Search ( BOARD_STRUCT *pos, int depthleft, int alpha, int beta, bool 
     if ( depthleft <= 0 )
         return qsearch( pos, alpha, beta );
 
+    // Razoring
+    int staticEval = Evaluate(pos, alpha, beta);
+    if ( depthleft == 1 && staticEval + 510 <= alpha )
+        return qsearch( pos, alpha, beta );
+
     // Null Move Pruning
     bool isCheck = inCheck( pos->side, pos );
     if ( DoNull && !isCheck && depthleft >= 3 && !zugzwang( pos ) ) {
@@ -153,7 +158,7 @@ static int Search ( BOARD_STRUCT *pos, int depthleft, int alpha, int beta, bool 
     bool FutilityPruning = false;
     if ( depthleft == 1 ) {
 
-        int staticEval = Evaluate(pos, alpha, beta), futilityMargin = 200;
+        int futilityMargin = 200;
         if ( !isCheck && abs(alpha) < MATE_VALUE && staticEval + futilityMargin < alpha )
             FutilityPruning = true;
     }
