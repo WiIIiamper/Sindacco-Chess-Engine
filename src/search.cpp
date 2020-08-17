@@ -197,9 +197,9 @@ static int Search ( BOARD_STRUCT *pos, int depthleft, int alpha, int beta, bool 
             if ( List.moves[i].captured == NONE ) {
 
                 int included = -1;
-                for (int i = 0; i <= 1; i++ ) {
-                    if ( sameMove( List.moves[i], pos->searchKillers[i][ pos->ply ] ) )
-                        included = i;
+                for (int j = 0; j <= 1; j++ ) {
+                    if ( sameMove( List.moves[i], pos->searchKillers[j][ pos->ply ] ) )
+                        included = j;
                 }
 
                 // If the move is not in the killer move array then add it as a killer move
