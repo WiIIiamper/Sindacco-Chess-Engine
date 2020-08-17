@@ -19,6 +19,7 @@ Sindacco's search currently has the following features:
 * #### Null Move Pruning
 * #### Late Move Reductions
 * #### Futility Pruning
+* #### Razoring
 
 ## Evaluation:
 
