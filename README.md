@@ -4,6 +4,9 @@ Sindacco is a decently strong chess engine written in C++. It has it's own GUI (
 made with SFML. It uses a matrix and some piece-lists to reprezent the board. It features a pretty 
 fast legal move generator.  For the moment it only works on windows.
 
+Video Demonstration:
+https://www.youtube.com/watch?v=IRIjlm6xMvQ
+
 ## Search features:
 
 Sindacco's search currently has the following features:
