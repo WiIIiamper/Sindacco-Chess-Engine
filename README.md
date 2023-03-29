@@ -5,7 +5,7 @@ made with SFML. It uses a matrix and some piece-lists to reprezent the board. It
 fast legal move generator.  For the moment it only works on windows.
 
 Video Demonstration:
-https://www.youtube.com/watch?v=IRIjlm6xMvQ
+[![Watch the video](https://img.youtube.com/vi/IRIjlm6xMvQ/maxresdefault.jpg)](https://youtu.be/IRIjlm6xMvQ)
 
 ## Search features:
 
