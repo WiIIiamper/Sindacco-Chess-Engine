@@ -1,5 +1,7 @@
+
 #include <iostream>
 #include "defs.h"
+#include "bitboards.h"
 
 using namespace std;
 
@@ -7,6 +9,13 @@ void UpdateMaterialList ( BOARD_STRUCT *pos ) {
 
     for (int i = 0; i < 13; i++)
         pos->pieceNum[i] = 0;
+
+    for ( int j = 1; j < 7; j++ )
+        for (int i = 0; i < 3; i++)
+            pos->Bitboards[j][i] = 0;
+
+    pos->occupied[0] = pos->occupied[1] = pos->occupied[2] = 0;
+    pos->Empty = 0;
 
     int FILE, RANK;
 
@@ -19,7 +28,16 @@ void UpdateMaterialList ( BOARD_STRUCT *pos ) {
                 pos->pieces[piece][ pos->pieceNum[ piece ] ][0] = RANK;
                 pos->pieces[piece][ pos->pieceNum[ piece ] ][1] = FILE;
                 pos->pieceNum[ piece ]++;
+
+                // Updating the pawn bitboards
+                pos->Bitboards[ PieceType[piece] ][ NO_SIDE ] |= SqBitMask[ RANK ][FILE];
+                pos->Bitboards[ PieceType[piece] ][ PieceSide[piece] ] |= SqBitMask[ RANK ][FILE];
+
+                pos->occupied[ PieceSide[piece] ] |= SqBitMask[RANK][FILE];
+                pos->occupied[ NO_SIDE ] |= SqBitMask[RANK][FILE];
             }
+            else
+                pos->Empty |= SqBitMask[RANK][FILE];
         }
     }
 }
@@ -114,10 +132,17 @@ void Parse_FEN ( char *fen , BOARD_STRUCT *pos ) {
 
 void ResetBoard ( BOARD_STRUCT * pos ) {
 
+    pos->occupied[0] = pos->occupied[1] = pos->occupied[2] = 0;
+    pos->Empty = 0;
+
     for (int i = 0; i < 8; i++) {
         for (int j = 0 ; j < 8; j++)
             pos->board[i][j] = EMPTY;
     }
+
+    for (int i = 0; i < 7; i++)
+        for (int j = 0; j < 3; j++)
+            pos->Bitboards[i][j] = 0;
 
     pos->enPass[0] = pos->enPass[1] NO_SQ;
 

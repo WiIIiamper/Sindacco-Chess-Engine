@@ -1,7 +1,12 @@
+
 #include "defs.h"
+#include "bitboards.h"
 
 int dirX[] = {-1, 1, 0, 0, -1, -1, 1, 1, 2, 2, 1, 1, -1, -1, -2, -2};
 int dirY[] = {0, 0, -1, 1, -1, 1, -1, 1, -1, 1, 2, -2, 2, -2, -1, 1};
+
+enum { Up = 8 };
+enum { ALL, EVASIONS };
 
 // Legality test for a move: makes the move, checks if
 // the king is in Check and then unmakes the move.
@@ -191,7 +196,7 @@ static void GenerateQueenMoves ( int RANK, int FILE, int SIDE, BOARD_STRUCT *pos
     }
 }
 
-static void GenerateKingMoves ( int RANK, int FILE, int SIDE, BOARD_STRUCT *pos, MoveLIST *List ) {
+static void GenerateKingMoves ( int RANK, int FILE, int SIDE, BOARD_STRUCT *pos, MoveLIST *List, bool isCheck ) {
 
     int k = pos->board[RANK][FILE];
     pos->board[RANK][FILE] = EMPTY;
@@ -212,7 +217,7 @@ static void GenerateKingMoves ( int RANK, int FILE, int SIDE, BOARD_STRUCT *pos,
     pos->board[RANK][FILE] = k;
 
     // CASTLING
-    if ( SIDE == WHITE && !inCheck(WHITE, pos) ) {
+    if ( SIDE == WHITE && !isCheck ) {
 
         if ( pos->castlePermission & WKCA) {
 
@@ -226,7 +231,7 @@ static void GenerateKingMoves ( int RANK, int FILE, int SIDE, BOARD_STRUCT *pos,
                if ( !isSquareAttacked(RANK, FILE-1, BLACK, pos) && !isSquareAttacked(RANK, FILE-2, BLACK, pos) )
                   AddMove( pos, List, RANK, FILE, RANK, FILE-2, false, true, true );
         }
-    } else if ( !inCheck( BLACK, pos ) ) {
+    } else if ( !isCheck ) {
 
         if ( pos->castlePermission & BKCA ) {
 
@@ -310,6 +315,63 @@ static void GeneratePawnMoves ( int RANK, int FILE, int SIDE, BOARD_STRUCT *pos,
     }
 }
 
+/*static void GeneratePawnPushes ( BOARD_STRUCT *pos, MoveLIST *List ) {
+
+    U64 target = pos->Empty;
+    U64 singlePush, doublePush;
+
+    if ( pos->side == WHITE ) {
+
+        singlePush = pos->Bitboards[PAWN][WHITE] >> Up;
+        singlePush &= target;
+
+        doublePush = singlePush & RankMask[ 5 ];
+        doublePush = doublePush >> Up;
+        doublePush &= target;
+
+    } else {
+
+        singlePush = pos->Bitboards[PAWN][BLACK] << Up;
+        singlePush &= target;
+
+        doublePush = singlePush & RankMask[ 2 ];
+        doublePush = doublePush << Up;
+        doublePush &= target;
+    }
+
+    int x = 0, y = 0;
+    while ( singlePush ) {
+
+        if ( singlePush & 1 ) {
+
+            int RANK = pos->side == WHITE ? x + 1 : x - 1;
+            int FILE = y;
+            bool pinned = isPinnedPiece( pos, RANK, FILE );
+            AddMove( pos, List, RANK, FILE, x, y, false, false, !pinned);
+        }
+
+        if ( doublePush & 1 ) {
+
+            int RANK = pos->side == WHITE ? x + 2 : x - 2;
+            int FILE = y;
+            bool pinned = isPinnedPiece( pos, RANK, FILE );
+            AddMove( pos, List, RANK, FILE, x, y, false, false, !pinned);
+        }
+
+        singlePush = singlePush >> 1;
+        doublePush = doublePush >> 1;
+
+        y++;
+        if ( y > 7 )
+            x++, y = 0;
+    }
+}
+
+static void GeneratePawnMoves ( BOARD_STRUCT *pos, MoveLIST *List ) {
+
+    GeneratePawnPushes( pos , List);
+}*/
+
 static void GenerateCheckEvasions( int Side, BOARD_STRUCT *pos, MoveLIST *List );
 
 void GenerateAllMoves ( int SIDE, BOARD_STRUCT *pos, MoveLIST *List ) {
@@ -319,6 +381,8 @@ void GenerateAllMoves ( int SIDE, BOARD_STRUCT *pos, MoveLIST *List ) {
         GenerateCheckEvasions( SIDE, pos, List );
         return;
     }
+
+    //GeneratePawnMoves(pos, List);
 
     int lo, hi;
     if ( SIDE == WHITE )
@@ -336,7 +400,7 @@ void GenerateAllMoves ( int SIDE, BOARD_STRUCT *pos, MoveLIST *List ) {
                 case BISHOP: GenerateBishopMoves(Rank, File, SIDE, pos, List); break;
                 case ROOK: GenerateRookMoves(Rank, File, SIDE, pos, List); break;
                 case QUEEN: GenerateQueenMoves(Rank, File, SIDE, pos, List); break;
-                case KING: GenerateKingMoves(Rank, File, SIDE, pos, List); break;
+                case KING: GenerateKingMoves(Rank, File, SIDE, pos, List, false); break;
             }
         }
     }
@@ -418,7 +482,7 @@ static void GenerateCheckEvasions ( int Side, BOARD_STRUCT *pos, MoveLIST *List 
     // If the king is in double check then the
     // only legal moves are king moves
     if ( numCheckers > 1 )
-        GenerateKingMoves( Rank, File, Side, pos, List );
+        GenerateKingMoves( Rank, File, Side, pos, List, true );
     else {
 
         /* If the king is not in double check then we can only do the legality test
@@ -569,142 +633,7 @@ static void GenerateCheckEvasions ( int Side, BOARD_STRUCT *pos, MoveLIST *List 
                     }
                 }
             } else if ( PieceType[ piece ] == KING )
-                GenerateKingMoves(RANK, FILE, Side, pos, List);
-            }
-        }
-    }
-}
-
-// In qserch() we only need to generate the captures so we don't need to
-// do the legality test on quiet moves.
-void GenerateCaptures ( BOARD_STRUCT *pos, MoveLIST *List ) {
-
-    int SIDE = pos->side;
-    List->Count = 0;
-
-    int lo, hi;
-    if ( SIDE == WHITE )
-        lo = 1, hi = 6;
-    else lo = 7, hi = 12;
-
-    for ( int piece = lo; piece <= hi; piece++ ) {
-        for ( int cnt = 0; cnt < pos->pieceNum[piece]; cnt++ ) {
-
-            int RANK = pos->pieces[piece][cnt][0];
-            int FILE = pos->pieces[piece][cnt][1];
-
-            if ( PieceType[ piece ] == PAWN ) {
-
-                if ( SIDE == WHITE ) {
-
-                    // CAPTURES
-                    if ( onBoard( RANK-1, FILE+1 ) ) {
-                        if ( pos->board[RANK-1][FILE+1] != EMPTY && PieceSide[ pos->board[RANK-1][FILE+1] ] != SIDE )
-                            AddMove(pos, List, RANK, FILE, RANK-1, FILE+1, false, false, false);
-                    }
-                    if ( onBoard( RANK-1, FILE-1 ) ) {
-                        if ( pos->board[RANK-1][FILE-1] != EMPTY && PieceSide[ pos->board[RANK-1][FILE-1] ] != SIDE )
-                            AddMove(pos, List, RANK, FILE, RANK-1, FILE-1, false, false, false);
-                    }
-
-                    // ENPASSANT MOVES
-                    if ( onBoard( RANK-1, FILE+1 ) ) {
-                        if ( RANK-1 == pos->enPass[0] && FILE+1 == pos->enPass[1] )
-                            AddMove(pos, List, RANK, FILE, RANK-1, FILE+1, true, false, false);
-                    }
-                    if ( onBoard( RANK-1, FILE-1 ) ) {
-                        if ( RANK-1 == pos->enPass[0] && FILE-1 == pos->enPass[1] )
-                            AddMove(pos, List, RANK, FILE, RANK-1, FILE-1, true, false, false);
-                    }
-                } else {
-
-                    // CAPTURES
-                    if ( onBoard( RANK+1, FILE+1 ) ) {
-                        if ( pos->board[RANK+1][FILE+1] != EMPTY && PieceSide[ pos->board[RANK+1][FILE+1] ] != SIDE )
-                            AddMove(pos, List, RANK, FILE, RANK+1, FILE+1, false, false, false);
-                    }
-                    if ( onBoard( RANK+1, FILE-1 ) ) {
-                        if ( pos->board[RANK+1][FILE-1] != EMPTY && PieceSide[ pos->board[RANK+1][FILE-1] ] != SIDE )
-                            AddMove(pos, List, RANK, FILE, RANK+1, FILE-1, false, false, false);
-                    }
-
-                    // ENPASSANT MOVES
-                    if ( onBoard( RANK+1, FILE+1 ) ) {
-                        if ( RANK+1 == pos->enPass[0] && FILE+1 == pos->enPass[1] )
-                            AddMove(pos, List, RANK, FILE, RANK+1, FILE+1, true, false, false);
-                    }
-                    if ( onBoard( RANK+1, FILE-1 ) ) {
-                        if ( RANK+1 == pos->enPass[0] && FILE-1 == pos->enPass[1] )
-                            AddMove(pos, List, RANK, FILE, RANK+1, FILE-1, true, false, false);
-                    }
-                }
-            } else if ( PieceType[ piece ] == KNIGHT ) {
-
-                for ( int l = 8; l < 16; l++ ) {
-                    int i = RANK + dirX[l];
-                    int j = FILE + dirY[l];
-
-                    if ( onBoard(i, j) ) {
-                        if ( PieceSide[ pos->board[i][j] ] == 1-SIDE )
-                            AddMove( pos, List, RANK, FILE, i, j, false, false, false );
-                    }
-                }
-            } else if ( PieceType[ piece ] == ROOK ) {
-
-                for ( int l = 0; l < 4; l++ ) {
-                    int i = RANK + dirX[l];
-                    int j = FILE + dirY[l];
-
-                    for (; OK(i, j, pos); i += dirX[l], j += dirY[l] ) ;
-
-                    if ( onBoard(i, j) ) {
-                        if ( PieceSide[ pos->board[i][j] ] == 1-SIDE )
-                            AddMove( pos, List, RANK, FILE, i, j, false, false, false );
-                    }
-                }
-            } else if ( PieceType[ piece ] == BISHOP ) {
-
-                for ( int l = 4; l < 8; l++ ) {
-                    int i = RANK + dirX[l];
-                    int j = FILE + dirY[l];
-
-                    for (; OK(i, j, pos); i += dirX[l], j += dirY[l] );
-
-                    if ( onBoard(i, j) ) {
-                        if ( PieceSide[ pos->board[i][j] ] == 1-SIDE )
-                                AddMove( pos, List, RANK, FILE, i, j, false, false, false );
-                    }
-                }
-            } else if ( PieceType[ piece ] == QUEEN ) {
-
-                for ( int l = 0; l < 8; l++ ) {
-                    int i = RANK + dirX[l];
-                    int j = FILE + dirY[l];
-
-                    for (; OK(i, j, pos); i += dirX[l], j += dirY[l] );
-
-                    if ( onBoard(i, j) ) {
-                        if ( PieceSide[ pos->board[i][j] ] == 1-SIDE )
-                            AddMove( pos, List, RANK, FILE, i, j, false, false, false );
-                    }
-                }
-            } else if ( PieceType[ piece ] == KING ) {
-
-                int k = pos->board[RANK][FILE];
-                pos->board[RANK][FILE] = EMPTY;
-
-                for ( int l = 0; l < 8; l++ ) {
-                    int i = RANK + dirX[l];
-                    int j = FILE + dirY[l];
-
-                    if ( onBoard(i, j) ) {
-                        if ( PieceSide[ pos->board[i][j] ] == 1-SIDE )
-                            if ( !isSquareAttacked( i, j, 1-SIDE, pos) )
-                                AddMove( pos, List, RANK, FILE, i, j, false, false, true );
-                    }
-                }
-
-                pos->board[RANK][FILE] = k;
+                GenerateKingMoves(RANK, FILE, Side, pos, List, true);
             }
         }
     }

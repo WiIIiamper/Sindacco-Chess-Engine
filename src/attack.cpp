@@ -1,4 +1,6 @@
+
 #include "defs.h"
+#include "bitboards.h"
 
 static int dirR[] = {-1, 1, 0, 0, -1, -1, 1, 1, 2, 2, 1, 1, -1, -1, -2, -2};
 static int dirF[] = {0, 0, -1, 1, -1, 1, -1, 1, -1, 1, 2, -2, 2, -2, -1, 1};
@@ -45,55 +47,16 @@ bool isSquareAttacked ( int Rank , int File, int Side, BOARD_STRUCT *pos ) {
     }
 
     // Checks if the square is attacked by a knight.
-    for ( int l = 8; l < 16; l++ ) {
-        int i = Rank + dirR[l];
-        int j = File + dirF[l];
-
-        if ( onBoard(i, j) ) {
-            int piece = pos->board[i][j];
-            if ( PieceSide[piece] == Side && PieceType[piece] == KNIGHT )
-                return true;
-        }
-    }
+    if ( pos->Bitboards[KNIGHT][Side] & KnightAttackMask[ Rank ][ File ] )
+        return true;
 
     // Checks if the square is attacked by a pawn.
-    if ( Side == WHITE ) {
-
-        if ( onBoard(Rank+1, File+1) ) {
-            int Piece = pos->board[ Rank+1 ][ File+1 ];
-            if ( PieceType[ Piece ] == PAWN && PieceSide[ Piece ] == Side )
-                return true;
-        }
-        if ( onBoard(Rank+1, File-1) ) {
-            int Piece = pos->board[ Rank+1 ][ File-1 ];
-            if ( PieceType[ Piece ] == PAWN && PieceSide[ Piece ] == Side )
-                return true;
-        }
-    } else {
-
-        if ( onBoard(Rank-1, File+1) ) {
-            int Piece = pos->board[ Rank-1 ][ File+1 ];
-            if ( PieceType[ Piece ] == PAWN && PieceSide[ Piece ] == Side )
-                return true;
-        }
-        if ( onBoard(Rank-1, File-1) ) {
-            int Piece = pos->board[ Rank-1 ][ File-1 ];
-            if ( PieceType[ Piece ] == PAWN && PieceSide[ Piece ] == Side )
-                return true;
-        }
-    }
+    if ( pos->Bitboards[PAWN][Side] & PawnAttacks[Side][Rank][File] )
+        return true;
 
     // Checks if the square is attacked by the king.
-    for ( int l = 0; l < 8; l++ ) {
-        int i = Rank + dirR[l];
-        int j = File + dirF[l];
-
-        if ( onBoard(i, j) ) {
-            int piece = pos->board[i][j];
-            if ( PieceSide[piece] == Side && PieceType[piece] == KING )
-                return true;
-        }
-    }
+    if ( pos->Bitboards[KING][Side] & KingAttackMask[Rank][File] )
+        return true;
 
     return false;
 }

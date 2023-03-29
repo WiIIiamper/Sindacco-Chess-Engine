@@ -6,11 +6,9 @@
 
 #define MATE_VALUE 50000
 #define interrupt 80000
-int DEPTH, nodes;
+int DEPTH, nodes, bestscore;
 
 using namespace std;
-
-MOVE_STRUCT NO_MOVE;
 
 static int qsearch ( BOARD_STRUCT *pos, int alpha, int beta ) {
 
@@ -28,11 +26,11 @@ static int qsearch ( BOARD_STRUCT *pos, int alpha, int beta ) {
         alpha = stadPad;
 
     MoveLIST List;
-    GenerateCaptures( pos, &List );
+    GenerateAllMoves( pos->side, pos, &List );
 
     sort( List.moves+1 , List.moves + List.Count + 1 , compareMoves );
 
-    for ( int i = 1; i <= List.Count; i++ ) {
+    for ( int i = 1; i <= List.Count && List.moves[i].captured != NONE; i++ ) {
 
         MakeMove( List.moves[i], pos );
         int Score = -qsearch( pos, -beta, -alpha );
@@ -78,8 +76,6 @@ static bool isInteresting ( BOARD_STRUCT *pos, MOVE_STRUCT Move) {
 // Search is the Alpha Beta Pruning function
 static int Search ( BOARD_STRUCT *pos, int depthleft, int alpha, int beta, bool DoNull ) {
 
-    nodes++;
-
     int HashFlag = HFALPHA;
     MOVE_STRUCT BestMove;
 
@@ -97,6 +93,7 @@ static int Search ( BOARD_STRUCT *pos, int depthleft, int alpha, int beta, bool 
 
     if ( depthleft <= 0 )
         return qsearch( pos, alpha, beta );
+    nodes++;
 
     // Razoring
     int staticEval = Evaluate(pos, alpha, beta);
@@ -263,18 +260,21 @@ static MOVE_STRUCT GetBestMove ( BOARD_STRUCT *pos, int alpha, int beta ) {
     for ( int i = 1; i <= List.Count; i++ ) {
 
         MakeMove( List.moves[i], pos );
-        int Score = -Search( pos, DEPTH-1, -beta, -alpha, true );
+        int score = -Search( pos, DEPTH-1, -beta, -alpha, true );
         UndoMove( pos );
 
-        if ( Score == interrupt ) {
-            if ( DEPTH == 1 )
-                StoreHASH( pos, BestMove, 1, HFEXACT, alpha );
+        if ( score == interrupt ) {
 
+            if ( alpha >= bestscore ) {
+                cout << "info depth " << DEPTH << " moves searched " << i-1 << "\n";
+                return BestMove;
+            }
             return NO_MOVE;
         }
 
-        if ( Score > alpha ) {
-            alpha = Score;
+
+        if ( score > alpha ) {
+            alpha = score;
             BestMove = List.moves[i];
 
             // History Heuristic
@@ -290,15 +290,9 @@ static MOVE_STRUCT GetBestMove ( BOARD_STRUCT *pos, int alpha, int beta ) {
 
 static void ResetSearchHeuristics ( BOARD_STRUCT *pos ) {
 
-    NO_MOVE.captured = EMPTY;
-    NO_MOVE.castle = false;
-    NO_MOVE.ep = false;
-    NO_MOVE.promotion = NONE;
-    NO_MOVE.score = 0;
-    NO_MOVE.from[0] = NO_MOVE.from[1] = NO_SQ;
-    NO_MOVE.to[0] = NO_MOVE.to[1] = NO_SQ;
-
     int i;
+    pos->ply = 0;
+
     for (i = 0; i < MAXDEPTH; i++)
         pos->searchKillers[0][i] = pos->searchKillers[1][i] = NO_MOVE;
 
@@ -310,37 +304,49 @@ static void ResetSearchHeuristics ( BOARD_STRUCT *pos ) {
     }
 }
 
-MOVE_STRUCT IterativeDeepening ( BOARD_STRUCT *pos ) {
+static int getNps( long long start );
+
+// searchPosition is the Iterative Deepening function
+MOVE_STRUCT searchPosition ( BOARD_STRUCT *pos ) {
 
     DEPTH = 1;
     long long start = GetTickCount();
     nodes = 0;
-
-    int alpha = -infinite, beta = infinite;
-    ResetSearchHeuristics( pos );
+    bestscore = -infinite-1;
     MOVE_STRUCT BestMove = NO_MOVE;
 
     while ( DEPTH < MAXDEPTH ) {
-        pos->ply = 0;
+        ResetSearchHeuristics( pos );
 
-        MOVE_STRUCT Move = GetBestMove( pos, alpha, beta );
+        MOVE_STRUCT Move = GetBestMove( pos, -infinite, infinite );
         if ( sameMove( Move, NO_MOVE ) )
             break;
 
         int score = ProbeHashMove( pos, 0, -infinite, infinite );
+        bestscore = score;
         BestMove = Move;
 
+        if ( CheckUp() )
+            break;
+
         cout << "info depth " << DEPTH << " + quies score cp " << score << " nodes " << nodes << " time " <<
-        GetTickCount() - start << " move " ; PrintMOVE( BestMove ); cout << "\n";
+        GetTickCount() - start << /*" nps " << getNps(start) << */" move " ; PrintMOVE( BestMove ); cout << "\n";
 
         DEPTH++;
-        ResetSearchHeuristics( pos );
     }
 
-    if ( sameMove( NO_MOVE, BestMove ) )
-        BestMove = GetHashMove( pos );
-
-    cout << "Nodes searched: " << nodes << " in: " << GetTickCount()-start << " ms bestove: ";
+    cout << "Nodes searched: " << nodes << " in: " << GetTickCount()-start << " ms nps " << getNps(start) << " bestove: ";
     PrintMOVE( BestMove ); cout << "\n\n";
     return BestMove;
+}
+
+static int getNps( long long start ) {
+
+    int ms = GetTickCount() - start;
+    // to avoid division by 0
+    if ( !ms ) ms++;
+
+    int nps = ( nodes*1000 )/ms;
+
+    return nps;
 }

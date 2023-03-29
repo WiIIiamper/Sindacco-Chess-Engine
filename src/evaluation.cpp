@@ -1,17 +1,17 @@
+
 #include "defs.h"
+#include "bitboards.h"
 
 static int dirR[] = {-1, 1, 0, 0, -1, -1, 1, 1, 2, 2, 1, 1, -1, -1, -2, -2};
 static int dirF[] = {0, 0, -1, 1, -1, 1, -1, 1, -1, 1, 2, -2, 2, -2, -1, 1};
 
-int sqNearKing[2][8][8];
+U64 kingZone[2];
 
 static int evalPawn ( int side, int x, int y, BOARD_STRUCT *pos );
 static int evalBishop( int side, int x, int y, BOARD_STRUCT *pos );
 static int evalKnight( int side, int x, int y, BOARD_STRUCT *pos );
 static int evalRook( int side, int x, int y, BOARD_STRUCT *pos );
 static int evalQueen( int side, int x, int y, BOARD_STRUCT *pos );
-static void setSquaresNearKING ( BOARD_STRUCT *pos );
-
 
 // Evaluate is the static evaluation function, takes a board
 // and return a score from the side's to move POV
@@ -23,7 +23,8 @@ int Evaluate ( BOARD_STRUCT *pos, int alpha, int beta ) {
         return posValue;
 
     int side = pos->side, value = 0;
-    setSquaresNearKING( pos );
+    kingZone[WHITE] = KingAttackMask[ pos->pieces[wK][0][0] ][ pos->pieces[wK][0][1] ];
+    kingZone[BLACK] = KingAttackMask[ pos->pieces[bK][0][0] ][ pos->pieces[bK][0][1] ];
 
     // evaluate pieces + piece square tables
     for ( int i = 1; i < 13; i++ ) {
@@ -80,38 +81,14 @@ int Evaluate ( BOARD_STRUCT *pos, int alpha, int beta ) {
     return value;
 }
 
-static void setSquaresNearKING ( BOARD_STRUCT *pos ) {
-
-    for (int i = 0; i < 8; i++)
-        for (int j = 0; j < 8; j++) {
-            sqNearKing[0][i][j] = 0;
-            sqNearKing[1][i][j] = 0;
-        }
-
-    for ( int i = 0; i <= 1; i++ ) {
-
-        int k = i == 0 ? 6 : 12;
-
-        // King Squares
-        int x = pos->pieces[ k ][0][0];
-        int y = pos->pieces[ k ][0][1];
-
-        for ( int l = 0; l < 8; l++ ) {
-
-            if ( onBoard( x+dirR[l] , y+dirF[l] ) )
-                sqNearKing[ i ][ x+dirR[l] ][ y+dirF[l] ] = 1;
-        }
-    }
-}
-
 static bool isPawnSupported( int x, int y, int side, BOARD_STRUCT *pos );
 
 static int evalPawn ( int side, int x, int y, BOARD_STRUCT *pos ) {
 
     int result = 0;
-    int isPassed = 1;
+    int isPassed = 0;
     int isOpposed = 0;
-    int isWeak = 1;
+    int isWeak = 0;
 
     result += PieceValue[ PAWN ];
 
@@ -119,56 +96,22 @@ static int evalPawn ( int side, int x, int y, BOARD_STRUCT *pos ) {
         result += PawnTable[x][y];
     else result += PawnTable[7-x][y];
 
-    int stepFrd, stepBkd;
-    if ( side == WHITE )
-        stepFrd = -1, stepBkd = 1;
-    else stepFrd = 1, stepBkd = -1;
+    // Checks if the pawn is passed
+    if ( !( pos->Bitboards[PAWN][ 1-side ] & PassedPawnMask[ side ][x][y] ) )
+        isPassed = 1;
 
-    // First loop checks if the pawn is passed
-    for ( int xx = x + stepFrd; onBoard( xx, y ); xx += stepFrd ) {
+    // Checks if the pawn is opposed or a double pawn
+    if ( pos->Bitboards[PAWN][ NO_SIDE ] & OpenFileMask[side][x][y] ) {
 
-        if ( PieceType[ pos->board[xx][y] ] == PAWN ) { // either opposed by enemy pawn or double pawn
-            isPassed = 0;
-
-            if ( PieceSide[ pos->board[xx][y] ] != side )
-                isOpposed = 1;
-            else result -= 20; // double pawn penalty
-
-            break;
-        }
-
-        if ( onBoard( xx, y+1 ) ) {
-            if ( PieceType[ pos->board[xx][y+1] ] == PAWN
-            && PieceSide[ pos->board[xx][y+1] ] != side )
-                isPassed = 0;
-        }
-
-        if ( onBoard( xx, y-1 ) ) {
-            if ( PieceType[ pos->board[xx][y-1] ] == PAWN
-                && PieceSide[ pos->board[xx][y-1] ] != side )
-                    isPassed = 0;
-        }
+        if ( pos->Bitboards[PAWN][ side ] & OpenFileMask[side][x][y] )
+            result -= 20; // penalty for double pawn
+        else
+            isOpposed = 1;
     }
 
-    // Second loop checks if the pawn has support
-    for ( int xx = x + stepBkd; onBoard(xx, y); xx += stepBkd ) {
-
-        if ( onBoard(xx, y-1) ) {
-            if ( PieceType[ pos->board[xx][y-1] ] == PAWN
-                && PieceSide[ pos->board[xx][y-1] ] == side ) {
-                    isWeak = 0;
-                    break;
-                }
-        }
-
-        if ( onBoard(xx, y+1) ) {
-            if ( PieceType[ pos->board[xx][y+1] ] == PAWN
-                && PieceSide[ pos->board[xx][y+1] ] == side ) {
-                    isWeak = 0;
-                    break;
-                }
-        }
-    }
+    // Checks if the pawn is isolated ( weak )
+    if ( !( pos->Bitboards[PAWN][ side ] & WeakPawnMask[side][x][y] ) )
+        isWeak = 1;
 
     // evaluating passed pawns
     if ( isPassed ) {
@@ -231,8 +174,8 @@ static int evalBishop( int side, int x, int y, BOARD_STRUCT *pos ) {
         int xx = x + dirR[l], yy = y + dirF[l];
         for (; onBoard(xx, yy); xx += dirR[l], yy += dirF[l] ) {
             mobility++;
-            if ( sqNearKing[!side][xx][yy] )
-                attacks++; // Bishop is attacking the enemy king zone
+            //if ( sqNearKing[!side][xx][yy] )
+                //attacks++; // Bishop is attacking the enemy king zone
 
             if ( pos->board[xx][yy] != EMPTY )
                 break;
@@ -262,8 +205,8 @@ static int evalRook( int side, int x, int y, BOARD_STRUCT *pos ) {
         int xx = x + dirR[l], yy = y + dirF[l];
         for (; onBoard(xx, yy); xx += dirR[l], yy += dirF[l] ) {
             mobility++;
-            if ( sqNearKing[!side][xx][yy] )
-                attacks++; // Rook is attacking the enemy king zone
+            //if ( sqNearKing[!side][xx][yy] )
+                //attacks++; // Rook is attacking the enemy king zone
 
             if ( pos->board[xx][yy] != EMPTY )
                 break;
@@ -286,16 +229,14 @@ static int evalKnight( int side, int x, int y, BOARD_STRUCT *pos ) {
         result += KnightTable[x][y];
     else result += KnightTable[7-x][y];
 
+    U64 mobbMask = 0, attMask = 0;
     // Collects data about mobility and king attacks
-    for ( int l = 8; l < 16; l++ ) {
+    mobbMask = KingAttackMask[x][y] & pos->Empty;
+    mobbMask |= KingAttackMask[x][y] & pos->occupied[ 1-side ];
+    attMask = mobbMask & kingZone[ 1-side ];
 
-        int xx = x + dirR[l], yy = y + dirF[l];
-        if ( onBoard(xx, yy) ) {
-            mobility++;
-            if ( sqNearKing[ !side ][xx][yy] )
-                attacks++; // Knight is attacking the enemy king zone
-        }
-    }
+    mobility = __builtin_popcount( mobbMask );
+    attacks = __builtin_popcount( attMask );
 
     result = result + 4 * ( mobility - 4 );
     result = result + 2 * attacks;
@@ -320,8 +261,8 @@ static int evalQueen( int side, int x, int y, BOARD_STRUCT *pos ) {
         int xx = x + dirR[l], yy = y + dirF[l];
         for (; onBoard(xx, yy); xx += dirR[l], yy += dirF[l] ) {
             mobility++;
-            if ( sqNearKing[!side][xx][yy] )
-                attacks++; // Queen is attacking the enemy king zone
+            //if ( sqNearKing[!side][xx][yy] )
+                //attacks++; // Queen is attacking the enemy king zone
 
             if ( pos->board[xx][yy] != EMPTY )
                 break;

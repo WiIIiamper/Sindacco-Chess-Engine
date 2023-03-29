@@ -1,5 +1,7 @@
 #include "defs.h"
 #include <iostream>
+#include <algorithm>
+#include <cassert>
 
 using namespace std;
 
@@ -8,7 +10,7 @@ using namespace std;
 static int Perft ( BOARD_STRUCT *pos, int depthleft ) {
 
     MoveLIST List;
-    GenerateAllMoves( pos->side, pos, &List );
+    GenerateAllMoves(pos->side, pos, &List);
 
     if ( depthleft == 1 )
         return List.Count;
@@ -25,7 +27,7 @@ static int Perft ( BOARD_STRUCT *pos, int depthleft ) {
     return nodes;
 }
 
-void Divide ( BOARD_STRUCT *pos, int depth ) {
+int Divide ( BOARD_STRUCT *pos, int depth ) {
 
     cout << "Perft depth: " << depth << "\n";
 
@@ -44,6 +46,7 @@ void Divide ( BOARD_STRUCT *pos, int depth ) {
         totalNodes += nodes;
     }
     cout << "\nNodes searched: " << totalNodes << "\n" ;
+    return totalNodes;
 }
 
 void PerftTesting ( BOARD_STRUCT *pos, int depth ) {
@@ -52,4 +55,27 @@ void PerftTesting ( BOARD_STRUCT *pos, int depth ) {
         Divide( pos, i );
     }
     cout << "\n";
+}
+
+void MovegenTest () {
+
+    BOARD_STRUCT board[1];
+
+    Parse_FEN( START_FEN, board );
+    PerftTesting( board, 6 );
+
+    Parse_FEN( PERFT1, board );
+    PerftTesting( board, 5 );
+
+    Parse_FEN( PERFT2, board );
+    PerftTesting( board, 7 );
+
+    Parse_FEN( PERFT3, board );
+    PerftTesting( board, 5 );
+
+    Parse_FEN( PERFT4, board );
+    PerftTesting( board, 5 );
+
+    Parse_FEN( PERFT5, board );
+    PerftTesting( board, 5 );
 }

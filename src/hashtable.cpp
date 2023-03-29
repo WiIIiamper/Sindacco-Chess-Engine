@@ -5,7 +5,7 @@
 
 using namespace std;
 
-// 16 MB;
+// 32 MB;
 const int TSize = 0x100000 * 32;
 
 // Stores the best move found in a hash table.
@@ -57,17 +57,8 @@ MOVE_STRUCT GetHashMove ( BOARD_STRUCT *pos ) {
     if ( pos -> HashTable -> ptable[ index ].posKey == pos->posKey )
         return pos-> HashTable -> ptable[ index ].Move;
 
-    // If there isn't a NOMOVE is returned
-    MOVE_STRUCT NOMOVE;
-    NOMOVE.captured = EMPTY;
-    NOMOVE.castle = false;
-    NOMOVE.ep = false;
-    NOMOVE.promotion = NONE;
-    NOMOVE.score = 0;
-    NOMOVE.from[0] = NOMOVE.from[1] = NO_SQ;
-    NOMOVE.to[0] = NOMOVE.to[1] = NO_SQ;
-
-    return NOMOVE;
+    // If there isn't, a NOMOVE is returned
+    return NO_MOVE;
 }
 
 static void ClearHashTable( S_HASHTABLE *table ) {

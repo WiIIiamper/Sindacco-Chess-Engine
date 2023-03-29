@@ -1,5 +1,6 @@
 #include "defs.h"
 #include <cmath>
+//#include <cassert>
 
 using namespace std;
 
@@ -81,6 +82,7 @@ void MakeMove ( MOVE_STRUCT Move, BOARD_STRUCT *pos ) {
     if ( pos->board[xx][yy] != EMPTY ) {
         captured = pos->board[xx][yy];
         pos->posKey ^= PieceKey[ captured ][xx][yy];
+        //assert ( PieceType[captured] != KING );
     }
 
     // Update the MoveHistory

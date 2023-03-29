@@ -17,7 +17,7 @@ typedef unsigned long long U64;
 #define PERFT3 "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"
 #define PERFT4 "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"
 #define PERFT5 "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
-#define MATE "2rqr1k1/1p2bppp/p3pn2/3bN1B1/P2P3Q/1B5R/1P3PPP/R5K1 w - - 0 1"
+#define AUX "rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR b KQkq - 0 1"
 
 enum { EMPTY, wP, wN, wB, wR, wQ, wK, bP, bN, bB, bR, bQ, bK };
 enum { WKCA = 1, WQCA = 2, BKCA = 4, BQCA = 8 };
@@ -29,10 +29,10 @@ enum { HFEXACT, HFALPHA, HFBETA};
 
 typedef struct {
 
-    int from[2];
-    int to[2];
-    int captured;
-    int promotion;
+    short int from[2];
+    short int to[2];
+    short int captured;
+    short int promotion;
     bool ep;
     bool castle;
     int score;
@@ -86,6 +86,11 @@ typedef struct {
 
     UNDO_MOVE MoveHistory[ MAXPLIES ];
 
+    // Bitboards
+    U64 Bitboards[7][3];
+    U64 occupied[3];
+    U64 Empty;
+
     // piece list
     int pieces[13][10][2];
 
@@ -98,6 +103,8 @@ typedef struct {
 
 
 // GLOBAL
+extern MOVE_STRUCT NO_MOVE;
+
 extern U64 PieceKey[13][8][8];
 extern U64 SideKEY;
 extern U64 CastleKey[16];
@@ -154,9 +161,10 @@ extern void TakeNullMoveBack ( BOARD_STRUCT *pos );
 
 // PerftTesting.cpp
 extern void PerftTesting ( BOARD_STRUCT *pos, int depth );
+extern void MovegenTest();
 
 // search.cpp
-extern MOVE_STRUCT IterativeDeepening ( BOARD_STRUCT *pos );
+extern MOVE_STRUCT searchPosition ( BOARD_STRUCT *pos );
 extern void Pondering ( BOARD_STRUCT *pos );
 
 // evaluation.cpp
@@ -165,6 +173,7 @@ extern int Evaluate ( BOARD_STRUCT *pos, int alpha, int beta );
 // GUI.cpp
 extern void startGame ( BOARD_STRUCT *pos );
 extern bool CheckUp();
+extern void Tournament ( BOARD_STRUCT *pos );
 
 // hashtable.cpp
 extern void InitHashTable ( S_HASHTABLE *table );
@@ -175,7 +184,10 @@ extern MOVE_STRUCT GetHashMove ( BOARD_STRUCT *pos );
 
 // timealloc.cpp
 extern void initTimeControl();
-extern U64 AllocTime();
+extern int AllocTime( int ply );
+
+// book.cpp
+extern MOVE_STRUCT GetBookMove ( BOARD_STRUCT *pos );
 
 #endif // DEFS_H_INCLUDED
 
